@@ -90,3 +90,135 @@ System.out.println(threeHighCaloricDishNames);
 ```
 
 이 코드는 자바 8 이전의 방식과 비교해서 '고칼로리 요리 3개를 찾아라' 를 좀 더 선언형으로 데이터를 처리할 수 있었다. 스트림 라이브러리에서 필터링(filter), 추출(map), 축소(limit) 기능을 제공하므로 직접 이 기능을 구현할 필요가 없다.
+
+### 4.3 스트림과 컬렉션
+
+이제 컬렉션 API와 스트림 API의 개념적인 차이를 확인하자.
+
+둘 다 공통적으로 **연속된(sequenced)** 요소 형식의 값을 저장하는 자료구조의 인터페이스를 제공한다(아무 값에나 접근 하는게 아니라 순차적으로 값에 접근함).
+
+둘 사이의 가장 큰 차이점은 데이터를 **언제** 계산하느냐다.
+
+컬렉션은 현재 자료구조가 포함하는 **모든** 값을 메모리에 저장하는 자료구조이며, 컬렉션의 모든 요소는 컬렉션에 추가 하기 전에 계산되어야 한다.
+
+반면 스트림은 이론적으로 **요청할 때만 요소를 계산** 하는 고정된 자료구조다.
+
+![img](./streamAndCollection.png)
+
+#### 4.3.1 딱 한 번만 탐색할 수 있다
+
+탐색된 스트림의 요소는 **소비**된다. 한 번 탐색한 요소를 다시 탐색하려면 초기 데이터 소스에서 새로운 스트림을 만들어야 한다.
+
+그러려면 컬렉션처럼 반복 사용할 수 있는 데이터 소수여야 한다. 만일 데이터 소스가 I/O 채널이라면 소스를 반복 사용할 수 없으므로 새로운 스트림을 만들 수 없다.
+
+```java
+List<String> title = Arrays.asList("JavaB", "In", "Action");
+Stream<String> s = title.stream();
+s.forEach(System.out::println); // 성공적으로 출력
+// s.forEach(System.out::println); // java.lang.IllegalStateException: 스트림이 이미 소비되었거나 닫힘
+```
+
+스트림은 단 한 번만 소비할 수 있다는 점을 명시하자!
+
+> 스트림과 컬렉션의 철학적 접근:
+>
+> 스트림은 시간적으로 흩어진 값의 집합으로 간주할 수 있다.
+>
+> 반면 컬렉션은 특정 시간에 모든 것이 존재하는 공간(컴퓨터 메모리)에 흩어진 값으로 비유할 수 있다.
+
+#### 4.3.2 외부 반복과 내부 반복
+
+컬렉션과 스트림의 또 다른 차이점은 데이터 반복 처리 방법이다.
+
+**외부 반복(external iteration)** : 사용자가 for-each 등을 사용해서 직접 요소를 반복해야 한다.
+
+**내부 반복(internal iteration)** : 함수에 어떤 작업을 수행할지만 지정하면 모든 것이 알아서 처리된다.
+
+스트림 라이브러리는 내부 반복을 사용하며, 내부 반복은 반복을 알아서 처리하고 결과 스트림값을 어딘가에 저장해준다.
+
+컬렉선 for-each 루프 외부 반복:
+
+```java
+List<String> names = new ArrayList<>();
+for (Dish dish : menu) // 메뉴 리스트를 범위 기반 loop 로 명시적으로 순차 반복한다.
+    names.add(dish.getName()); // 이름을 추출해서 리스트에 추가한다.
+```
+
+스트림의 내부 반복:
+
+```java
+List<String> names = menu.stream()
+                    .map(Dish::getName) // map 메서드를 getName 메서드로 파라미터화해서 요리명을 추출
+                    .collect(toList()); // 파이프라인을 실행한다. 반복자는 필요 없다.
+```
+
+내부 반복 뿐 아니라 자바 8에서 스트림을 제공하는 더 다양한 이유가 있다. 스트림 라이브러리의 내부 반복은 데이터 표현과 하드웨어를 활용한 **병렬성 구현을 자동으로 선택**한다. 반면 for-each 를 이용하는 외부 반복은 병렬성을 스스로 관리해야 한다.
+
+### 4.4 스트림 연산
+
+**중간 연산(intermediate operation)** : 연결할 수 있는 스트림 연산
+
+**최종 연산(terminal operation)** : 스트림을 닫는 연산
+
+```java
+import java.util.stream.Stream;
+
+List<String> names = menu.stream()
+                         .filter(dish -> dish.getCalories() > 300)
+                         .map(Dish::getName)
+                         .limit(3)
+                         .collect(toList());
+```
+
+- filter, map, limit 는 서로 연결되어 파이프라인을 형성 (중간 연산)
+- collect 로 파이프라인을 실행한 다음에 닫음 (최종 연산)
+
+#### 4.4.1 중간 연산
+
+filter 나 sorted 같은 중간 연산은 다른 스트림을 반환한다. 따라서 여러 중간 연산을 연결해서 질의를 만들 수 있다.
+
+중간 연산의 중요한 특징은 **단말 연산을 스트림 파이프라인에 실행하기 전까지는 아무 연산도 수행하지 않는다는 것**, 즉 **게으르다(lazy)** 는 것이다. 중간 연산을 합친 다음에 합쳐진 중간 연산을 최종 연산으로 한 번에 처리하기 때문이다.
+
+```java
+List<String> names = 
+        menu.stream()
+        .filter(dish -> {
+            System.out.println("filtering:" + dish.getName());
+            return dish.getCalories() > 300;
+    })
+    .map(dish -> {
+        System.out.println("mapping:" + dish.getName());
+        return dish.getName();
+    })
+    .limit(3)
+    .collect(toList());
+System.out.println(names);
+```
+
+실행 결과
+
+```java
+filtering:pork
+mapping:pork
+filtering:beef
+mapping:beef
+filtering:chicken
+mapping:chicken
+[pork, beef, chicken]
+```
+
+#### 4.4.2 최종 연산
+
+최종 연산은 스트림 파이프라인에서 결과를 도출한다. 보통 최종 연산에 의해 List, Integer, void 등 스트림 이외의 결과가 반환된다.
+
+예를 들어 다음 파이프라인에서 forEach 는 소스의 각 요리에 람다를 적용한 다음 void 를 반환하는 최종 연산이다.
+
+`menu.stream().forEach(System.out::println);`
+
+#### 4.4.3 스트림 이용하기
+
+스트림 이용 과정은 다음과 같이 세 가지로 요약할 수 있다.
+
+- 질의를 수행할 (컬렉션 같은 데이터 소스)
+- 스트림 파이프라인을 구성할 중간 연산 연결
+- 스트림 파이프라인을 실행하고 결과를 만들 최종 연산
