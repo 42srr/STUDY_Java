@@ -223,3 +223,170 @@ Optional<Integer> sum = numbers.stream().reduce((a, b) -> (a + b));
 | `collect`   | 최종 연산 | `R`                     | `Collector<T, A, R>`     | (복잡한 구조)           |
 | `reduce`    | 최종 연산 | `Optional<T>`또는 `T` | `BinaryOperator<T>`      | `(T, T) -> T`         |
 | `count`     | 최종 연산 | `long`                  | (없음)                     | (없음)                  |
+
+---
+
+### 5.6 ~ 5.8 공부하며 떠올린 질문들에 대한 답
+
+- mapToInt() 같은 기본형 특화 스트림은 왜 박싱, 언박싱 비용을 줄이는가?
+- joining() 이 뭐였지
+- 숫자형 스트림을 사용하는 이유는?
+- int max = maxCalories.orElse(1); // 값이 없을 때 기본 최댓값을 명시적으로 설정 여기서 최댓값이 없는 상황은 무엇을 말하는 거지? boxed() 와 mapToObj() 의 차이 (알 것 같기는 한데, 좀 더 정확히)
+- Stream<double[]> pythagoreanTriples2 = Instream.rangeClosed(1 ....) 188 페이지 여기서 boxed() 를 했는데 flatMap 에서 lambda 식에서 IntStream 을 사용하는 이유는?
+- IntSupplier 와 IntStream 의 차이는?
+- 우리는 무한한 크기를 가진 스트림을 처리하고 있으므로 limit 를 이용해서 명시적으로 스트림의 크기를 제한해야 한다. 그렇지 않으면 최종 연산(예제에서는 forEach)을 수행했을 때 아무 결과도 계산되지 않는다. 마찬가지로 무한 스트림의 요소는 무한적으로 계산이 반복되므로 정렬하거나 리듀스 할 수 없다. <- 이게 무슨 말인지 모르겠다.
+
+---
+
+#### ❓ 1. `mapToInt()` 같은 기본형 특화 스트림은 왜 박싱, 언박싱 비용을 줄이는가?
+
+**배경:**
+
+기존 `Stream<Integer>`는 내부적으로 `Integer` 객체를 다루기 때문에  **기본형 → 객체 (박싱)** , **객체 → 기본형 (언박싱)** 과정이 자주 발생함.
+
+```java
+Stream<Integer> s = list.stream().map(x -> x + 1); // x는 Integer
+```
+
+➡️ 계산 시마다 `Integer` 객체를 꺼내서 int로 바꾸고, 다시 결과를 Integer로 포장해야 함
+
+➡️ 박싱/언박싱 비용 + GC 부담
+
+**해결책:**
+
+`mapToInt()`를 쓰면 **int 전용 스트림 (IntStream)** 으로 변환되어, 박싱이 없는 기본형 값으로만 계산 가능.
+
+```java
+IntStream s = list.stream().mapToInt(x -> x); // x는 int
+```
+
+✔️ 더 빠르고 메모리 효율 좋음
+
+---
+
+#### ❓ 2. `joining()` 이 뭐였지?
+
+`Collectors.joining()`은 스트림의 문자열을 **하나로 이어 붙이는 Collector**야.
+
+```java
+List<String> words = Arrays.asList("Java", "in", "Action");
+String result = words.stream().collect(Collectors.joining(" "));
+// 결과: "Java in Action"
+```
+
+옵션으로 접두사, 구분자, 접미사 지정도 가능:
+
+```java
+Collectors.joining(", ", "[", "]") // 결과 예: "[a, b, c]"
+```
+
+---
+
+#### ❓ 3. 숫자형 스트림을 사용하는 이유는?
+
+✔️  **성능** : 오토박싱 없이 기본형 값을 다루므로 빠름
+
+✔️  **편의성** : `sum()`, `average()`, `range()` 같은 전용 연산이 제공됨
+
+✔️  **특화된 API** : `IntStream`, `DoubleStream` 등에서만 제공되는 API들이 있음
+
+---
+
+#### ❓ 4. `int max = maxCalories.orElse(1);`
+
+**최댓값이 없는 상황은 어떤 경우인가?**
+
+`OptionalInt maxCalories = menu.stream().mapToInt(Dish::getCalories).max();`
+
+처럼 `max()`를 쓰면, **빈 스트림이면 Optional.empty()가 반환됨**
+
+> 즉, `menu`가 빈 리스트일 때는 `max()`도 결과가 없으므로 `OptionalInt.empty()`를 반환하고
+>
+> 이 경우 `orElse(1)`이 호출되어 기본값 1을 대체로 설정하게 되는 것
+
+---
+
+#### ❓ 5. `boxed()`와 `mapToObj()`의 차이점
+
+| 구분           | 설명                                                                            |
+| -------------- | ------------------------------------------------------------------------------- |
+| `boxed()`    | 기본형 스트림을 객체 스트림으로 변환 (`IntStream`→`Stream<Integer>`)       |
+| `mapToObj()` | 기본형 값을 받아서 다른 객체로 직접 매핑 (`IntStream`→`Stream<다른 타입>`) |
+
+```java
+IntStream.range(1, 5).boxed(); // Stream<Integer>
+IntStream.range(1, 5).mapToObj(i -> "숫자: " + i); // Stream<String>
+```
+
+✔️ `boxed()`는 단순 포장, `mapToObj()`는 변환
+
+---
+
+#### ❓ 6. `Stream<double[]> pythagoreanTriples2 = …`
+
+**flatMap에서 lambda 식 안에 IntStream을 쓰는 이유는?**
+
+```java
+IntStream.rangeClosed(1, 100).boxed()
+    .flatMap(a -> 
+        IntStream.rangeClosed(a, 100)
+            .filter(b -> Math.sqrt(a*a + b*b) % 1 == 0)
+            .mapToObj(b -> new double[]{a, b, Math.sqrt(a*a + b*b)})
+    )
+```
+
+➡️ 이유는 `flatMap(Function)` 안에서 *b* 값을 여러 개 만들고 싶기 때문
+
+즉, `a = 3`일 때 가능한 `b = 4~100` 까지 다 돌려보고, 조건에 맞는 `b`만 골라서 `{a, b, c}`를 만들어야 하니까
+
+**IntStream으로 여러 b를 만들고 → 조건을 걸고 → 객체로 바꾼 후** → `flatMap`으로 평면화
+
+📌 `boxed()`는 `IntStream`을 `Stream<Integer>`로 바꿔서 `flatMap`이 동작하게 만든 것
+
+---
+
+#### ❓ 7. `IntSupplier`와 `IntStream`의 차이
+
+| 항목 | IntSupplier                                | IntStream                 |
+| ---- | ------------------------------------------ | ------------------------- |
+| 역할 | int 값을 "하나" 생성하는 함수형 인터페이스 | int 값을 담은 "스트림"    |
+| 예시 | `() -> 42`                               | `IntStream.of(1, 2, 3)` |
+
+`IntSupplier`는 `getAsInt()` 메서드를 가진  *"값을 공급하는 람다"* ,
+
+`IntStream.generate(IntSupplier)`와 같이 쓰면 **무한 스트림 생성**이 가능함.
+
+```java
+IntSupplier supplier = () -> (int)(Math.random() * 100);
+IntStream.generate(supplier).limit(5).forEach(System.out::println);
+```
+
+---
+
+#### ❓ 8. 무한 스트림은 왜 limit이 없으면 아무 계산도 되지 않는가?
+
+스트림은 **게으른 평가(lazy evaluation)** 이다.
+
+```java
+Stream.iterate(0, n -> n + 2)
+    .filter(n -> n % 4 == 0)
+    .forEach(System.out::println);
+```
+
+이 코드는 무한 스트림이기 때문에 `forEach`까지 도달해야 연산이 시작됨.
+
+그런데 `limit()`이 없다면 **중단 조건이 없어서 무한히 실행됨 → 프로그램이 끝나지 않음**
+
+또한 `sorted()`나 `reduce()`는  **전 요소를 한 번에 알아야 하므로** ,
+
+무한 스트림처럼 *끝이 없는 경우에는 절대로 끝나지 않음* → 그래서 사용 불가
+
+✔️ 무한 스트림은 **`limit()`과 함께 써야 계산이 실제로 일어남**
+
+---
+
+필요하면 이걸 너 발표할 때 질문 리스트로 쓰기 좋게
+
+✅ 각 질문에 대해 간단 요약 버전도 따로 정리해줄게.
+
+그걸 노션/Obsidian에 옮겨도 되고, 발표용으로 쓸 수도 있어. 원할까?
