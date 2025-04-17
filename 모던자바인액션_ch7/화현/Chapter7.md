@@ -21,7 +21,7 @@ public long iterativeSum(long n) {
 ```
 
 2. 순차 스트림으로 더하기
-	```java
+```java
 public long sequentialSum(long n) {
     return Stream.iterate(1L, i -> i + 1)
                  .limit(n)
@@ -164,14 +164,15 @@ ParallelStreamBenchmark.sequentialSum      avgt  200  56796079.555 ±  368493.53
 	- 병렬 스트림을 이용했지만, 기대만큼의 성능 향상은 없음
 	- `Stream.iterate(1, i -> i + 1)`과 같이 앞 결과에 따라 다음 값이 정해지는 형태는 처음 값도 알아야 다음 값도 만들 수 있고, 다음 값도 그 다음 값을 만드는데 필요하기 때문에, 데이터를 미리 나눌 수 없음. 즉, n개의 데이터를 순차적으로 계산해서 만든 다음 병렬 처리하는데, 계산하는 과정 자체가 순차적이라 병렬화의 이득을 못봄. 
 	- `Stream.iterate()`는 기본형이 아니라, 객체로 처리가 되어 박싱/언박싱 비용 발생
-  - `rangedSum` 
-	  - `LongStream`은 기본형 `long`기반으로 작동되기에 박싱/언박싱 비용 없음
-	  - `Spliterator`의 `trySplit()`을 통해 1~n사이의 값을 절반으로 나누고 이 과정은 재귀적으로 이루어짐. 각 스레드가 작업을 한 후, `reduce()`를 통해 병합함
-  - `parallelRangeSum` 
-	  - `rangeClosed()`는 스레드가 나누어진 채 작업이 진행되기에, 병렬 처리가 가능함.
-	  - 하지만 작업량이 작거나 데이터 크기가 작을 경우에는 병렬화가 느려질 수도 있음
+- `rangedSum` 
+    - `LongStream`은 기본형 `long`기반으로 작동되기에 박싱/언박싱 비용 없음
+    - `Spliterator`의 `trySplit()`을 통해 1~n사이의 값을 절반으로 나누고 이 과정은 재귀적으로 이루어짐. 각 스레드가 작업을 한 후, `reduce()`를 통해 병합함
+  
+- `parallelRangeSum` 
+    - `rangeClosed()`는 스레드가 나누어진 채 작업이 진행되기에, 병렬 처리가 가능함.
+    - 하지만 작업량이 작거나 데이터 크기가 작을 경우에는 병렬화가 느려질 수도 있음
 
-> [!NOTE] 용어 정리
+> **용어 정리**
 > 박싱 : 기본형 값을 객체로 감싸는 것 ex) int -> Integer
 > 언박싱 : 객체에서 기본형 값을 꺼내는 것 ex) Integer -> int
 
